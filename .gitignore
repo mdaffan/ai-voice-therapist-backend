@@ -1,0 +1,16 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+agents/__pycache__
+agents/forms/__pycache__
+# Virtual environments
+.venv
+.env.local
+test.html
+.vscode/
+data/
+dump.rdb
