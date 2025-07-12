@@ -13,11 +13,14 @@ you just encountered.
 
 from __future__ import annotations
 
-import io
+import os
 from pathlib import Path
 import tempfile
+from openai import AsyncOpenAI
 
-import litellm
+# Initialised once for module reuse; reads OPENAI_API_KEY from env
+client = AsyncOpenAI()
+
 
 # Default model/voice can be overridden via environment variables supported by
 # LiteLLM (e.g. ``LITELLM_TTS_MODEL``) or by passing explicit kwargs into
@@ -27,48 +30,68 @@ import litellm
 async def synthesize(
     text: str,
     *,
-    model: str = "openai/tts-1",
+    model: str = "tts-1",  # OpenAI model name
     voice: str = "alloy",
-    **optional_params,
+    response_format: str = "pcm",
+    **extra,
 ) -> bytes:
-    """Generate speech for *text* and return raw MP3 bytes.
+    """Blocking TTS convenience – returns the full MP3 as bytes."""
 
-    Parameters
-    ----------
-    text:
-        Input text to vocalise.
-    model, voice:
-        Override LiteLLM settings if desired.
-    **optional_params:
-        Forwarded verbatim to ``litellm.aspeech`` – useful for provider-
-        specific tweaks.
-    """
-
-    # LiteLLM currently returns an object that can either stream to a file or
-    # expose ``audio_bytes`` in-memory. We avoid touching the filesystem by
-    # capturing the bytes into a ``BytesIO`` buffer.
-
-    response = await litellm.aspeech(
-        model=model,
+    response = await client.audio.speech.create(
+        model="tts-1",
         voice=voice,
         input=text,
-        optional_params=optional_params,
+        response_format="pcm",
+        **extra,
     )
 
-    # Newer LiteLLM versions: ``response.audio_bytes``
-    if hasattr(response, "audio_bytes") and isinstance(response.audio_bytes, (bytes, bytearray)):
-        return bytes(response.audio_bytes)
-
-    # Fallback for versions that require streaming to file
-    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+    # The SDK returns an object that can .audio or stream_to_file; easiest is to
+    # stream to tempfile to capture bytes.
+    with tempfile.NamedTemporaryFile(suffix=f".{response_format}", delete=False) as tmp:
         tmp_path = Path(tmp.name)
         response.stream_to_file(tmp_path)
         tmp.seek(0)
-        mp3_bytes = tmp.read()
+        data = tmp.read()
 
     try:
         tmp_path.unlink(missing_ok=True)
     except Exception:
         pass
 
-    return mp3_bytes
+    return data
+
+
+# ---------- Streaming variant ----------
+
+async def synthesize_stream(
+    text: str,
+    *,
+    model: str = "tts-1",
+    voice: str = "alloy",
+    chunk_size: int | None = None,
+    **optional_params,
+):
+    """Yield audio bytes incrementally as they are produced by the provider.
+
+    Falls back to yielding the full MP3 at once if streaming isn't supported.
+    """
+
+    try:
+        async with client.audio.speech.with_streaming_response.create(
+            model=model,
+            voice=voice,
+            input=text,
+            response_format="mp3",
+            **optional_params,
+        ) as resp:
+            # New SDK: resp.iter_bytes()
+            async for chunk in resp.iter_bytes(chunk_size=chunk_size or 4096):
+                yield chunk
+            return
+    except Exception as e:
+        import logging
+
+        logging.warning("TTS streaming failed – fallback to full synth: %s", e)
+
+    # Fallback – no streaming; emit full file
+    yield await synthesize(text, model=model, voice=voice, **optional_params)

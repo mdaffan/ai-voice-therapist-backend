@@ -4,7 +4,6 @@ build/
 dist/
 wheels/
 *.egg-info
-app/__pycache__*
 # Virtual environments
 .venv
 .env.local
@@ -12,3 +11,4 @@ test.html
 .vscode/
 data/
 dump.rdb
+app/__pycache__

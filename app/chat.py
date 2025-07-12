@@ -28,3 +28,22 @@ async def generate(prompt: str) -> str | None:
         stream=False,
     )
     return response.choices[0].message.content
+
+
+# New: streaming generator yielding incremental content pieces
+async def generate_stream(prompt: str):
+    """Yield assistant reply chunks as they arrive (SSE-friendly)."""
+
+    stream = await _router.acompletion(
+        model="primary",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+        stream=True,
+    )
+
+    async for chunk in stream:
+        # LiteLLM returns each chunk as an OpenAI-style delta dict
+        delta = chunk.choices[0].delta
+        content_piece = delta.get("content") if isinstance(delta, dict) else getattr(delta, "content", "")
+        if content_piece:
+            yield content_piece

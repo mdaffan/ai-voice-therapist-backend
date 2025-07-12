@@ -60,6 +60,24 @@ async def chat_completion(body: dict):
     return {"response": answer}
 
 
+# Streaming chat completion (Server-Sent Events)
+@app.post("/chat_stream")
+async def chat_completion_stream(body: dict):
+    text = body.get("text")
+    if not text:
+        raise HTTPException(400, detail="`text` field missing")
+
+    async def _event_generator():
+        async for token in chat.generate_stream(text):
+            # SSE format requires lines starting with 'data:' and ended by a blank line
+            yield f"data: {token}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+    )
+
+
 @app.post("/tts")
 async def text_to_speech(body: dict):
     text = body.get("text")
@@ -70,6 +88,24 @@ async def text_to_speech(body: dict):
         io.BytesIO(mp3_bytes),
         media_type="audio/mpeg",
         headers={"Content-Disposition": "inline; filename=reply.mp3"}
+    )
+
+
+# Streaming TTS endpoint
+@app.post("/tts_stream")
+async def tts_stream(body: dict):
+    text = body.get("text")
+    if not text:
+        raise HTTPException(400, detail="`text` field missing")
+
+    async def _gen():
+        async for chunk in tts.synthesize_stream(text):
+            yield chunk
+
+    return StreamingResponse(
+        _gen(),
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": "inline; filename=reply.mp3"},
     )
 
 

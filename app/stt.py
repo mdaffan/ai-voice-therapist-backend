@@ -18,7 +18,7 @@ async def transcribe_file(file_path: str) -> str:
 
     def _sync_run() -> str:
         with open(file_path, "rb") as audio_file:
-            response = transcription(model="gpt-4o-transcribe", file=audio_file)
+            response = transcription(model="whisper-1", file=audio_file)
             # Adapt this depending on your provider’s response schema
             return response.get("text", "").strip()
 
