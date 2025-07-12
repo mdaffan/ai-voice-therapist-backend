@@ -1,9 +1,16 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import io
-
+from pathlib import Path
+import os
 from app import stt, chat, tts
+# set api keys 
+
+
+# Persist uploaded audio under ../../data/<session>/<turn>.webm
+DATA_DIR = Path(__file__).parent.parent / "data"
+DATA_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(
     title="Voice Therapist API",
@@ -21,9 +28,26 @@ app.add_middleware(
 )
 
 @app.post("/stt")
-async def speech_to_text(file: UploadFile = File(...)):
+async def speech_to_text(
+    file: UploadFile = File(...),
+    session_id: str = Form(...),
+    turn: int = Form(...)
+):
+    """Save the uploaded blob and run STT on the saved file."""
+
     audio_bytes = await file.read()
-    text = await stt.transcribe_bytes(audio_bytes)
+
+    # ---------- persist to disk ----------
+    safe_session = session_id.replace("..", "")  # rudimentary sanitisation
+    session_dir = DATA_DIR / safe_session
+    session_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = session_dir / f"{turn}.webm"
+
+    with open(audio_path, "wb") as f:
+        f.write(audio_bytes)
+
+    # ---------- transcribe ----------
+    text = await stt.transcribe_file(str(audio_path))
     return {"text": text}
 
 
@@ -48,6 +72,7 @@ async def text_to_speech(body: dict):
         headers={"Content-Disposition": "inline; filename=reply.mp3"}
     )
 
+
 @app.get("/health")
 def health_check():
-    return {"status": "ok"} 
+    return {"status": "ok"}
