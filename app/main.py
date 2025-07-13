@@ -7,6 +7,26 @@ import os
 from app import stt, chat, tts
 # set api keys 
 
+# Import service layer
+from app.services import stt, chat, tts
+# ---------------- Conversation memory ------------------
+from typing import Dict, List
+
+# Hold conversation history across requests (simple in-memory store)
+_CONVERSATIONS: Dict[str, List[dict]] = {}
+
+def _get_history(session_id: str) -> List[dict]:
+    """Return the conversation list for a session, initialising with system prompt."""
+    if session_id not in _CONVERSATIONS:
+        from app.services.chat import THERAPIST_SYSTEM_PROMPT  # avoid circular issues
+
+        _CONVERSATIONS[session_id] = [
+            {"role": "system", "content": THERAPIST_SYSTEM_PROMPT},
+        ]
+    return _CONVERSATIONS[session_id]
+
+# Import settings to ensure env vars are populated
+from app.infra.config import settings  # noqa: E402  pylint: disable=wrong-import-position
 
 # Persist uploaded audio under ../../data/<session>/<turn>.webm
 DATA_DIR = Path(__file__).parent.parent / "data"
@@ -54,9 +74,19 @@ async def speech_to_text(
 @app.post("/chat")
 async def chat_completion(body: dict):
     text = body.get("text")
+    session_id = body.get("session_id", "default")
+
     if not text:
         raise HTTPException(400, detail="`text` field missing")
-    answer = await chat.generate(text)
+
+    history = _get_history(session_id)
+    history.append({"role": "user", "content": text})
+
+    answer = await chat.generate(history)
+
+    # Add assistant reply to history
+    history.append({"role": "assistant", "content": answer})
+
     return {"response": answer}
 
 
@@ -64,13 +94,23 @@ async def chat_completion(body: dict):
 @app.post("/chat_stream")
 async def chat_completion_stream(body: dict):
     text = body.get("text")
+    session_id = body.get("session_id", "default")
+
     if not text:
         raise HTTPException(400, detail="`text` field missing")
 
+    history = _get_history(session_id)
+    history.append({"role": "user", "content": text})
+
     async def _event_generator():
-        async for token in chat.generate_stream(text):
+        assistant_text_accum = ""
+        async for token in chat.generate_stream(history):
+            assistant_text_accum += token
             # SSE format requires lines starting with 'data:' and ended by a blank line
             yield f"data: {token}\n\n"
+
+        # After streaming is done, append assistant full reply to history
+        history.append({"role": "assistant", "content": assistant_text_accum})
 
     return StreamingResponse(
         _event_generator(),
