@@ -29,9 +29,14 @@ def _get_history(session_id: str) -> List[dict]:
 # Import settings to ensure env vars are populated
 from app.infra.config import settings  # noqa: E402  pylint: disable=wrong-import-position
 
-# Persist uploaded audio under ../../data/<session>/<turn>.webm
-DATA_DIR = Path(__file__).parent.parent / "data"
-DATA_DIR.mkdir(exist_ok=True)
+# Persist uploaded audio under /tmp in Vercel (read-only filesystem elsewhere) or ./data locally
+if os.environ.get("VERCEL"):
+    DATA_DIR = Path("/tmp") / "data"
+else:
+    DATA_DIR = Path(__file__).parent.parent / "data"
+
+# Ensure directory exists
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(
     title="Voice Therapist API",
