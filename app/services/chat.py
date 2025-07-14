@@ -48,8 +48,8 @@ _model_list = [
 _router = Router(
     model_list=_model_list,
     fallbacks=[{"primary": ["fallback"]}],
-    routing_strategy="latency-based-routing",
-    cache_responses=True,
+    # routing_strategy="latency-based-routing", Can be used to route to the fastest model, we can even use least busy, etc
+    # mock_testing_fallbacks=True, For testing purposes, we can mock the fallback model
 )
 
 

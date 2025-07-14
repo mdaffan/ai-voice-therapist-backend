@@ -5,6 +5,7 @@ import io
 from pathlib import Path
 import os
 from app.services import stt, chat, tts
+from app.infra.config import settings
 # set api keys 
 
 # Import service layer
@@ -112,8 +113,12 @@ async def tts_stream(body: dict):
         raise HTTPException(400, detail="`text` field missing")
 
     async def _gen():
-        async for chunk in tts.synthesize_stream_deepgram(text):
-            yield chunk
+        if settings.use_deepgram and settings.deepgram_api_key:
+            async for chunk in tts.synthesize_stream_deepgram(text):
+                yield chunk
+        else:
+            async for chunk in tts.synthesize_stream(text):
+                yield chunk
 
     return StreamingResponse(
         _gen(),

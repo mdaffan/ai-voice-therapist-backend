@@ -51,7 +51,6 @@ async def transcribe_file(file_path: str, model: str = "whisper-1") -> str:
             return resp.get("text", "").strip()
 
     loop = asyncio.get_event_loop()
-
     if settings.use_deepgram and settings.deepgram_api_key:
         return await loop.run_in_executor(None, _sync_run_deepgram)
     else:
