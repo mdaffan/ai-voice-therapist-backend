@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from types import SimpleNamespace
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore
 
 
 # Read .env into os.environ (no-op if file is missing)
@@ -32,12 +32,16 @@ settings = SimpleNamespace(
     # Vendor keys
     openai_api_key=_env("OPENAI_API_KEY"),
     anthropic_api_key=_env("ANTHROPIC_API_KEY"),
+    deepgram_api_key=_env("DEEPGRAM_API_KEY"),
 
     # Model names
     gpt_model=_env("GPT_MODEL", "gpt-4o"),
     claude_model=_env("CLAUDE_MODEL", "anthropic/claude-3-7-sonnet-latest"),
     stt_model=_env("STT_MODEL", "whisper-1"),
     tts_model=_env("TTS_MODEL", "tts-1"),
+
+    # Feature toggles
+    use_deepgram=os.getenv("USE_DEEPGRAM", "False").lower() == "true",
 )
 
 

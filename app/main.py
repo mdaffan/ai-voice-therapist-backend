@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import io
 from pathlib import Path
 import os
-from app import stt, chat, tts
+from app.services import stt, chat, tts
 # set api keys 
 
 # Import service layer
@@ -71,23 +71,7 @@ async def speech_to_text(
     return {"text": text}
 
 
-@app.post("/chat")
-async def chat_completion(body: dict):
-    text = body.get("text")
-    session_id = body.get("session_id", "default")
 
-    if not text:
-        raise HTTPException(400, detail="`text` field missing")
-
-    history = _get_history(session_id)
-    history.append({"role": "user", "content": text})
-
-    answer = await chat.generate(history)
-
-    # Add assistant reply to history
-    history.append({"role": "assistant", "content": answer})
-
-    return {"response": answer}
 
 
 # Streaming chat completion (Server-Sent Events)
@@ -118,17 +102,6 @@ async def chat_completion_stream(body: dict):
     )
 
 
-@app.post("/tts")
-async def text_to_speech(body: dict):
-    text = body.get("text")
-    if not text:
-        raise HTTPException(400, detail="`text` field missing")
-    mp3_bytes = await tts.synthesize(text)
-    return StreamingResponse(
-        io.BytesIO(mp3_bytes),
-        media_type="audio/mpeg",
-        headers={"Content-Disposition": "inline; filename=reply.mp3"}
-    )
 
 
 # Streaming TTS endpoint
@@ -139,7 +112,7 @@ async def tts_stream(body: dict):
         raise HTTPException(400, detail="`text` field missing")
 
     async def _gen():
-        async for chunk in tts.synthesize_stream(text):
+        async for chunk in tts.synthesize_stream_deepgram(text):
             yield chunk
 
     return StreamingResponse(
