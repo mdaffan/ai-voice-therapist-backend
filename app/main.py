@@ -119,15 +119,16 @@ async def chat_completion_stream(body: dict):
         # After streaming is done, append assistant full reply to history
         history.append({"role": "assistant", "content": assistant_text_accum})
 
-        # ----------------------- Persist turn log ----------------------- #
-        try:
-            log_path = LOG_DIR / f"{session_id}.txt"
-            with open(log_path, "a", encoding="utf-8") as log_file:
-                log_file.write(f"User: {text}\n")
-                log_file.write(f"Assistant: {assistant_text_accum}\n\n")
-        except Exception as exc:  # pragma: no cover
-            import logging
-            logging.warning("Failed to write conversation log: %s", exc)
+        # ----------------------- Persist turn log (non-prod) ----------------------- #
+        if not os.environ.get("VERCEL"):
+            try:
+                log_path = LOG_DIR / f"{session_id}.txt"
+                with open(log_path, "a", encoding="utf-8") as log_file:
+                    log_file.write(f"User: {text}\n")
+                    log_file.write(f"Assistant: {assistant_text_accum}\n\n")
+            except Exception as exc:  # pragma: no cover
+                import logging
+                logging.warning("Failed to write conversation log: %s", exc)
 
     return StreamingResponse(
         _event_generator(),
