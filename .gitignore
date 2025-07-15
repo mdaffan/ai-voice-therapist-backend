@@ -12,3 +12,4 @@ test.html
 data/
 dump.rdb
 app/__pycache__
+logs/

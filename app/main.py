@@ -38,6 +38,10 @@ else:
 # Ensure directory exists
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+# Directory for per-session conversation logs (ignored by VCS)
+LOG_DIR = Path(__file__).parent.parent / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
 app = FastAPI(
     title="Voice Therapist API",
     version="0.1.0",
@@ -74,6 +78,19 @@ async def speech_to_text(
 
     # ---------- transcribe ----------
     text = await stt.transcribe_file(str(audio_path))
+
+    # ---------------- Clean up temporary file to save storage -----------------
+    try:
+        audio_path.unlink()  # remove the uploaded file now that it is transcribed
+        # If the session directory is empty afterward, remove it as well
+        session_dir.rmdir()
+    except FileNotFoundError:
+        # Already removed or never created – ignore
+        pass
+    except OSError:
+        # Directory not empty or other issue – ignore but avoid crashing the API
+        pass
+
     return {"text": text}
 
 
@@ -101,6 +118,16 @@ async def chat_completion_stream(body: dict):
 
         # After streaming is done, append assistant full reply to history
         history.append({"role": "assistant", "content": assistant_text_accum})
+
+        # ----------------------- Persist turn log ----------------------- #
+        try:
+            log_path = LOG_DIR / f"{session_id}.txt"
+            with open(log_path, "a", encoding="utf-8") as log_file:
+                log_file.write(f"User: {text}\n")
+                log_file.write(f"Assistant: {assistant_text_accum}\n\n")
+        except Exception as exc:  # pragma: no cover
+            import logging
+            logging.warning("Failed to write conversation log: %s", exc)
 
     return StreamingResponse(
         _event_generator(),
