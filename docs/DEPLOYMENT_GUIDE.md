@@ -7,15 +7,9 @@ This guide explains how to deploy the UI and API in production (Vercel-based exa
 * OpenAI & Anthropic API keys
 * Docker installed locally (for manual build)
 
-## 2. Repo Layout Expectation
-```
-root/
-├─ voice-therapist-server/   # FastAPI
-└─ voice-therapist-ui/       # React + Vite
-```
+----
 
----
-## 3. FastAPI Backend on Vercel
+## 2. FastAPI Backend on Vercel
 1. **Directory** – `voice-therapist-server/`
 2. **Vercel Config** – already present as `vercel.json`:
    ```json
@@ -39,20 +33,20 @@ root/
 5. **Result** – API reachable at `https://example-therapist-server.vercel.app`.
 
 ---
-## 4. React UI on Vercel (Static)
+## 3. React UI on Vercel (Static)
 1. **Directory** – `voice-therapist-ui/`
 2. **Build Output** – Vercel detects `vite` and runs `pnpm build`, output in `dist/`.
 3. **Environment Variable** – expose `VITE_API_BASE` if API domain differs.
 4. **Deploy**
    ```bash
    cd voice-therapist-ui
-   vercel deploy --prod -e VITE_API_BASE="https://example-therapist-server.vercel.app"
+   vercel deploy --prod -e VITE_API_BASE="https://example-therapist-server.vercel.app" easier with the vercel dashboard itself
    ```
 5. **Custom Domain & HTTPS** – configure in Vercel dashboard.
 
 ---
 
-## 5. Infrastructure Diagram
+## 4. Infrastructure Diagram
 ```mermaid
 graph TD
   subgraph Vercel
