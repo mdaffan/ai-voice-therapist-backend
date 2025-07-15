@@ -38,9 +38,11 @@ else:
 # Ensure directory exists
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Directory for per-session conversation logs (ignored by VCS)
-LOG_DIR = Path(__file__).parent.parent / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+# Directory for per-session conversation logs (non-production only)
+LOG_DIR = None
+if not os.environ.get("VERCEL"):
+    LOG_DIR = Path(__file__).parent.parent / "logs"
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(
     title="Voice Therapist API",
