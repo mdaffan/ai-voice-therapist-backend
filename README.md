@@ -6,22 +6,72 @@ FastAPI application providing STT ↔ GPT-4o ↔ TTS glue for the Voice-Therapis
 
 ## 1 Architecture
 
-```
-┌───────────┐   REST / SSE   ┌──────────────────┐
-│  Routers  │──────────────▶│  Service layer   │
-└────┬──────┘                └────────┬─────────┘
-     │ include_router()                 │
-     ▼                                  ▼
-  FastAPI app                  3rd-party vendors (OpenAI, Anthropic …)
+```mermaid
+graph TD
+  subgraph "Client (Browser)"
+    UI["React + Vite\n(Click-to-talk UI)"]
+  end
+  subgraph "Server (FastAPI)"
+    STT_EP["/stt endpoint"]
+    CHAT_EP["/chat_stream endpoint"]
+    TTS_EP["/tts_stream endpoint"]
+    
+    subgraph "STT Services"
+      OPENAI_STT["OpenAI Whisper\n(Default)"]
+      DEEPGRAM_STT["Deepgram STT\n(if USE_DEEPGRAM=true)"]
+    end
+    
+    subgraph "Chat Services"
+      LITELLM["LiteLLM Router"]
+      OPENAI_CHAT["OpenAI GPT-4o\n(Primary)"]
+      CLAUDE["Claude Opus\n(Fallback)"]
+    end
+    
+    subgraph "TTS Services"
+      OPENAI_TTS["OpenAI TTS\n(Default)"]
+      DEEPGRAM_TTS["Deepgram TTS\n(if USE_DEEPGRAM=true)"]
+    end
+  end
+  subgraph "Vendors"
+    OPENAI_API["OpenAI APIs"]
+    DEEPGRAM_API["Deepgram APIs"]
+    ANTHROPIC["Anthropic API"]
+  end
+
+  UI -- "audio file" --> STT_EP
+  STT_EP -- "transcript" --> UI
+  UI -- "text" --> CHAT_EP
+  CHAT_EP -- "SSE tokens" --> UI
+  CHAT_EP -- "assistant text" --> TTS_EP
+  TTS_EP -- "audio stream" --> UI
+
+  STT_EP --> OPENAI_STT
+  STT_EP --> DEEPGRAM_STT
+  OPENAI_STT --> OPENAI_API
+  DEEPGRAM_STT --> DEEPGRAM_API
+  
+  CHAT_EP --> LITELLM
+  LITELLM --> OPENAI_CHAT
+  LITELLM --> CLAUDE
+  OPENAI_CHAT --> OPENAI_API
+  CLAUDE --> ANTHROPIC
+  
+  TTS_EP --> OPENAI_TTS
+  TTS_EP --> DEEPGRAM_TTS
+  OPENAI_TTS --> OPENAI_API
+  DEEPGRAM_TTS --> DEEPGRAM_API
+
+
+
+
 ```
 
 Directory layout:
 
 ```
 voice-therapist-server/app
-├─ main.py          ← creates FastAPI app & plugs routers
-├─ routers/         ← HTTP endpoints (chat, stt, tts, health)
-├─ services/        ← thin wrappers around vendor SDKs
+├─ main.py          ← declares HTTP endpoints (/stt, /chat_stream, /tts_stream, /health)
+├─ services/        ← whisper, chat (LiteLLM), TTS wrappers
 └─ infra/
    └─ config.py     ← typed env-loader (Pydantic)
 ```
@@ -55,27 +105,8 @@ docker run -p 9000:9000 --env-file .env voice-therapist-server
 
 ## 4 Endpoints
 
-| Method | Path           | Body                                             | Returns                       |
-|--------|---------------|--------------------------------------------------|--------------------------------|
-| POST   | `/stt`        | multipart file `speech.webm` + `session_id` etc. | `{ "text": "…" }`              |
-| POST   | `/chat`       | `{ "text": "hi", "session_id": "uuid" }`          | `{ "response": "…" }`           |
-| POST   | `/chat_stream`| same as above                                    | `text/event-stream`            |
-| POST   | `/tts`        | `{ "text": "hello" }`                           | `audio/mpeg` (full)            |
-| POST   | `/tts_stream` | `{ "text": "hello" }`                           | `audio/mpeg` (chunked stream)  |
-
----
-
-### Configuration reference (`.env`)
-
-```
-# Vendor keys
-OPENAI_API_KEY=sk-…
-ANTHROPIC_API_KEY=sk-…
-
-# Optional overrides
-GPT_MODEL=gpt-4o
-CLAUDE_MODEL=anthropic/claude-3-7-sonnet-latest
-STT_MODEL=whisper-1
-TTS_MODEL=tts-1
-PORT=9000
-``` 
+| Endpoint | Payload |
+|----------|---------|
+| `POST /stt` | multipart `speech.webm`, `session_id` (form-data) |
+| `POST /chat_stream` | `{ "text": "hi", "session_id": "uuid" }` |
+| `POST /tts_stream` | `{ "text": "hello" }` |
