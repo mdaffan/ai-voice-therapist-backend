@@ -4,14 +4,29 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-
+import asyncio
 from openai import AsyncOpenAI
 import requests
 
 from app.infra.config import settings
+from deepgram import (
+    DeepgramClient,
+    SpeakWebSocketEvents,
+    SpeakWSOptions,
+)
 
 client = AsyncOpenAI(api_key=settings.openai_api_key)
+# Deepgram client initialised lazily
+deepgram: DeepgramClient | None = None
 
+
+def _ensure_deepgram_client() -> DeepgramClient:
+    """Return a singleton Deepgram client (initialise if needed)."""
+
+    global deepgram
+    if deepgram is None:
+        deepgram = DeepgramClient(settings.deepgram_api_key)
+    return deepgram
 
 
 async def synthesize_stream(
@@ -53,7 +68,7 @@ async def synthesize_stream(
 # --------------------------------------------------------------------------- #
 # Deepgram TTS – stream bytes directly from the Deepgram “/v1/speak” endpoint #
 # --------------------------------------------------------------------------- #
-
+# Issues with streaming
 async def synthesize_stream_deepgram(
     text: str,
     *,
@@ -68,27 +83,36 @@ async def synthesize_stream_deepgram(
     This opens an HTTP chunked stream to Deepgram’s `/v1/speak` endpoint and
     yields raw audio bytes so callers can forward them to the client
     """
+    queue = asyncio.Queue()
+    done = asyncio.Event()
+    dg= _ensure_deepgram_client()
+    dg_connection = dg.speak.websocket.v("1")
+    def on_binary_data(self, data, **kwargs):
+        try:
+            print("Received binary data")
+            queue.put_nowait(data) 
+        except asyncio.QueueFull:
+            pass  # drop or handle overflow if needed
 
-    url = "https://api.deepgram.com/v1/speak"
-
-    params: dict[str, str | int] = {
-        "model": model,
-        "encoding": encoding,
-    }
-    if sample_rate is not None:
-        params["sample_rate"] = sample_rate
-
-    # Allow arbitrary query params (e.g., stability, style) via `query_params`.
-    params.update(optional_params.pop("query_params", {}))
-
-    headers = {
-        "Authorization": f"Token {settings.deepgram_api_key}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-    "text": text
-}
-    response = requests.post(url, headers=headers, json=payload, stream=True)
-    for chunk in response.iter_content(chunk_size=1024):
-        yield chunk
+    def on_close(self, *args, **kwargs):
+        done.set()
+    dg_connection.on(SpeakWebSocketEvents.AudioData, on_binary_data)
+    dg_connection.on(SpeakWebSocketEvents.Close, on_close)
+    options = SpeakWSOptions(
+            model="aura-2-thalia-en",
+            encoding="linear16",
+            sample_rate=16000,
+        )
+    if dg_connection.start(options) is False:
+        print("Failed to start connection")
+        return
+        # send the text to Deepgram
+    dg_connection.send_text(text)
+        # if auto_flush_speak_delta is not used, you must flush the connection by calling flush()
+    dg_connection.flush()
+    dg_connection.finish()
+    while not done.is_set() or not queue.empty():
+        chunk = await queue.get()
+        print("Received chunk data", chunk)
+        yield chunk 
    

@@ -1,17 +1,18 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import io
 from pathlib import Path
 import os
+import base64
 from app.services import stt, chat, tts
-from app.infra.config import settings
-# set api keys 
-
-# Import service layer
-from app.services import stt, chat, tts
+import uuid
 # ---------------- Conversation memory ------------------
 from typing import Dict, List
+import json
+
+# Ensure refactored WebSocket handler is registered
+from app.routers import ws_chat  # new modular router
 
 # Hold conversation history across requests (simple in-memory store)
 _CONVERSATIONS: Dict[str, List[dict]] = {}
@@ -49,6 +50,9 @@ app = FastAPI(
     version="0.1.0",
     summary="Low-latency voice ↔ GPT-4o backend"
 )
+
+
+app.include_router(ws_chat.router)
 
 # Allow dev UI; restrict in production.
 app.add_middleware(
@@ -160,7 +164,6 @@ async def tts_stream(body: dict):
         media_type="audio/mpeg",
         headers={"Content-Disposition": "inline; filename=reply.mp3"},
     )
-
 
 @app.get("/health")
 def health_check():
