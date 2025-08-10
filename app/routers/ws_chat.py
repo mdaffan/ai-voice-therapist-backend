@@ -1,11 +1,3 @@
-"""WebSocket Chat v2 – organised as an APIRouter.
-
-This is a clear, helper-driven rewrite of the original `/ws/chat` stub.
-The external protocol is identical to the earlier `ws_chat_v2.py`, but
-packaged as `router = APIRouter()` so it can be cleanly mounted from
-`app.main` without circular imports.
-"""
-
 from __future__ import annotations
 
 import json
@@ -40,7 +32,7 @@ def _get_history(session_id: str) -> List[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Protocol message tags – kept in sync with the React hook expectations.
+# Protocol message tags 
 # ---------------------------------------------------------------------------
 CLIENT = {"END": "end"}
 SERVER = {
@@ -49,7 +41,7 @@ SERVER = {
     "AUDIO_END": "audio_end",
 }
 
-# ---------------- DEV STUB HELPERS (optional) ---------------
+# ---------------- DEV STUB HELPERS  ---------------
 
 # Uncomment to bypass real services during dev.
 # HARDCODED_TRANSCRIPT = "I understand. How are you feeling now?"
@@ -118,7 +110,7 @@ async def _send_assistant_text(websocket: WebSocket, text: str, *, partial: bool
 
 
 # ---------------------------------------------------------------------------
-# WebSocket endpoint – identical runtime behaviour to old stub
+# WebSocket endpoint
 # ---------------------------------------------------------------------------
 
 
